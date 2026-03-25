@@ -5,7 +5,7 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from flask import Flask
 from threading import Thread
 
-# --- Flask Server (Render এর জন্য জরুরি) ---
+# --- Flask Server for Render ---
 app = Flask(__name__)
 @app.route('/')
 def home(): return "NexFlix Server is Live!"
@@ -14,7 +14,7 @@ def run_flask():
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
-# --- Configuration ---
+# --- Configuration (From Environment Variables) ---
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -27,26 +27,32 @@ bot = Client("NexFlixBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN
 @bot.on_message(filters.command("start") & filters.private)
 async def start(c, m):
     if m.from_user.id == ADMIN_ID:
-        await m.reply_text("✅ **Admin Mode Active!**\nভিডিও ফাইল পাঠান, আমি লিঙ্ক দিচ্ছি।")
+        await m.reply_text("✅ **Admin Mode Active!**\nSend me a video file for the streaming link.")
 
 @bot.on_message(filters.private & (filters.video | filters.document))
 async def stream(c, m):
     if m.from_user.id != ADMIN_ID: return
     
-    # স্ট্রিমিং লিঙ্ক তৈরি
+    # Generate Streaming Link
     stream_url = f"{APP_URL}/watch/{m.id}"
     
     await m.reply_text(
-        f"🔗 **Your Streaming Link:**\n`{stream_url}`",
+        f"🔗 **Streaming Link Ready:**\n`{stream_url}`",
         reply_markup=InlineKeyboardMarkup([[
             InlineKeyboardButton("🎬 Play Now", url=stream_url)
         ]])
     )
 
+# --- The Fix for Runtime Error ---
+async def main():
+    async with bot:
+        print("Bot is started!")
+        # Flask keeps the web service alive
+        await asyncio.Event().wait()
+
 if __name__ == "__main__":
-    # Flask সার্ভার আলাদা থ্রেডে চালানো
     Thread(target=run_flask).start()
-    
-    # এরর এড়াতে নতুন ইভেন্ট লুপ সেট করা
-    loop = asyncio.get_event_loop()
-    bot.run()
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
