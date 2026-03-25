@@ -1,10 +1,10 @@
 import os
+import sys
 from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from flask import Flask
 from threading import Thread
 
-# --- Flask Server ---
+# --- Flask Server for Render ---
 app = Flask(__name__)
 @app.route('/')
 def home(): return "NexFlix Server is Running!"
@@ -13,36 +13,43 @@ def run_flask():
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
-# --- Configuration ---
-API_ID = int(os.getenv("API_ID"))
-API_HASH = os.getenv("API_HASH")
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_ID"))
-APP_URL = os.getenv("APP_URL", "")
+# --- Configuration Check ---
+try:
+    API_ID = int(os.getenv("API_ID"))
+    API_HASH = os.getenv("API_HASH")
+    BOT_TOKEN = os.getenv("BOT_TOKEN")
+    ADMIN_ID = int(os.getenv("ADMIN_ID"))
+    APP_URL = os.getenv("APP_URL", "https://rnexflix.top")
+except Exception as e:
+    print(f"ERROR: Missing Env Variables: {e}")
+    sys.exit(1)
 
-bot = Client("NexFlixBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+# --- Bot Initialization ---
+bot = Client(
+    "NexFlixStreamBot",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    bot_token=BOT_TOKEN,
+    in_memory=True  # এটি রেন্ডারের স্টোরেজ সমস্যা কমাবে
+)
 
 @bot.on_message(filters.command("start") & filters.private)
-def start(c, m):
-    if m.from_user.id == ADMIN_ID:
-        m.reply_text("✅ **NexFlix Admin Active!**\nভিডিও পাঠান লিঙ্ক দিচ্ছি।")
+def start_cmd(client, message):
+    if message.from_user.id == ADMIN_ID:
+        message.reply_text("✅ **NexFlix Admin Active!**\nSend a video for the link.")
 
 @bot.on_message(filters.private & (filters.video | filters.document))
-def stream(c, m):
-    if m.from_user.id != ADMIN_ID: return
+def handle_video(client, message):
+    if message.from_user.id != ADMIN_ID:
+        return
     
-    # Generate Link
-    stream_url = f"{APP_URL}/watch/{m.id}"
-    
-    m.reply_text(
-        f"🔗 **Streaming Link:**\n`{stream_url}`",
-        reply_markup=InlineKeyboardMarkup([[
-            InlineKeyboardButton("🎬 Play Now", url=stream_url)
-        ]])
-    )
+    stream_url = f"{APP_URL}/watch/{message.id}"
+    message.reply_text(f"🔗 **Streaming Link:**\n`{stream_url}`")
 
 if __name__ == "__main__":
-    # Flask starts in background
-    Thread(target=run_flask).start()
-    # Simple bot run (No complex loops)
+    # Start Flask
+    Thread(target=run_flask, daemon=True).start()
+    # Start Bot
+    print("Starting NexFlix Bot...")
     bot.run()
+    
