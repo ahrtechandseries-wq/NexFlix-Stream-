@@ -1,64 +1,52 @@
 import os
+import asyncio
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from flask import Flask
 from threading import Thread
 
-# --- Flask Server for Render (Keep Alive) ---
+# --- Flask Server (Render এর জন্য জরুরি) ---
 app = Flask(__name__)
 @app.route('/')
-def home(): return "NexFlix Stream Server is Running!"
+def home(): return "NexFlix Server is Live!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
-# --- Load Config From Render Environment Variables ---
+# --- Configuration ---
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
-APP_URL = os.getenv("APP_URL") 
+APP_URL = os.getenv("APP_URL", "")
 
-bot = Client(
-    "NexFlixStreamBot",
-    api_id=API_ID,
-    api_hash=API_HASH,
-    bot_token=BOT_TOKEN
-)
+# --- Bot Initialization ---
+bot = Client("NexFlixBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# --- Handlers ---
 @bot.on_message(filters.command("start") & filters.private)
-async def start(client, message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    await message.reply_text("🎬 **NexFlix Admin Panel Active!**\nSend me a video file to get the streaming link.")
+async def start(c, m):
+    if m.from_user.id == ADMIN_ID:
+        await m.reply_text("✅ **Admin Mode Active!**\nভিডিও ফাইল পাঠান, আমি লিঙ্ক দিচ্ছি।")
 
 @bot.on_message(filters.private & (filters.video | filters.document))
-async def generate_stream_link(client, message):
-    # Only Admin can use this
-    if message.from_user.id != ADMIN_ID:
-        return
-
-    msg = await message.reply_text("⏳ *Processing File...*", quote=True)
+async def stream(c, m):
+    if m.from_user.id != ADMIN_ID: return
     
-    # Generate Link using Message ID
-    stream_link = f"{APP_URL}/watch/{message.id}"
+    # স্ট্রিমিং লিঙ্ক তৈরি
+    stream_url = f"{APP_URL}/watch/{m.id}"
     
-    text = (
-        "✅ **Link Generated!**\n\n"
-        f"🔗 **URL:** `{stream_link}`\n\n"
-        "Use this link in your website's Iframe."
-    )
-    
-    await msg.edit_text(
-        text,
+    await m.reply_text(
+        f"🔗 **Your Streaming Link:**\n`{stream_url}`",
         reply_markup=InlineKeyboardMarkup([[
-            InlineKeyboardButton("🌐 Open Stream", url=stream_link)
+            InlineKeyboardButton("🎬 Play Now", url=stream_url)
         ]])
     )
 
 if __name__ == "__main__":
-    # Start Flask in a separate thread
+    # Flask সার্ভার আলাদা থ্রেডে চালানো
     Thread(target=run_flask).start()
+    
+    # এরর এড়াতে নতুন ইভেন্ট লুপ সেট করা
+    loop = asyncio.get_event_loop()
     bot.run()
